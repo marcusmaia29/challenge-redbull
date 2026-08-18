@@ -19,12 +19,12 @@ export class StartScene extends Phaser.Scene {
   private tutorial?: Phaser.GameObjects.Container;
   private startBull?: Phaser.GameObjects.Sprite;
   private playerName = '';
-  private nameText?: Phaser.GameObjects.Text;
   private nameHint?: Phaser.GameObjects.Text;
   private nameField?: Phaser.GameObjects.Rectangle;
+  private nameInput?: HTMLInputElement;
+  private resizeNameInputHandler?: () => void;
   private nameFocused = false;
   private isStarting = false;
-  private keyboardHandler?: (event: KeyboardEvent) => void;
 
   constructor() {
     super('StartScene');
@@ -43,9 +43,7 @@ export class StartScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    // A Scene é reaproveitada após "Jogar novamente", mas seus objetos são
-    // destruídos no shutdown. Limpar a referência garante que o modal seja
-    // reconstruído e volte a responder ao clique.
+    this.destroyNameInput();
     this.tutorial = undefined;
     this.playerName = this.readSavedPlayerName();
     this.nameFocused = false;
@@ -54,17 +52,51 @@ export class StartScene extends Phaser.Scene {
     this.cameras.main.resetFX();
 
     this.createBackground();
-    this.add.rectangle(width / 2, height / 2, width, height, COLORS.navy, 0.42).setDepth(-5);
-
-    // Moldura e detalhes dão acabamento sem depender de novos assets.
-    this.add.rectangle(width / 2, 18, width, 10, COLORS.yellow, 0.95).setDepth(-3);
-    this.add.rectangle(width / 2, height - 18, width, 10, COLORS.red, 0.95).setDepth(-3);
-    this.add.circle(118, 132, 76, COLORS.yellow, 0.16).setDepth(-3);
-    this.add.circle(width - 112, 585, 105, COLORS.red, 0.14).setDepth(-3);
     this.add
-      .rectangle(width / 2, 350, 720, 575, COLORS.navy, 0.38)
-      .setStrokeStyle(2, COLORS.white, 0.18)
+      .rectangle(
+        width / 2,
+        height / 2,
+        width,
+        height,
+        COLORS.navy,
+        0.68,
+      )
+      .setDepth(-5);
+
+    this.add
+      .rectangle(width / 2, 9, width, 7, COLORS.yellow, 1)
+      .setDepth(8);
+    this.add
+      .rectangle(width / 2, height - 9, width, 7, COLORS.red, 1)
+      .setDepth(8);
+
+    this.add
+      .text(width / 2, 29, 'RED BULL  •  CAN CHALLENGE', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#ffc400',
+        letterSpacing: 2,
+      })
+      .setOrigin(0.5)
+      .setDepth(8);
+
+    this.add.circle(118, 132, 76, COLORS.yellow, 0.13).setDepth(-3);
+    this.add.circle(width - 112, 585, 105, COLORS.red, 0.12).setDepth(-3);
+    this.add
+      .rectangle(width / 2 + 8, 354, 740, 586, 0x000000, 0.28)
       .setDepth(-2);
+    this.add
+      .rectangle(width / 2, 346, 740, 586, COLORS.navy, 0.58)
+      .setStrokeStyle(3, COLORS.paleBlue, 0.18)
+      .setDepth(-2);
+
+    this.add
+      .rectangle(width / 2, 55, 740, 7, COLORS.red, 1)
+      .setDepth(-1);
+    this.add
+      .rectangle(width / 2, 61, 740, 4, COLORS.yellow, 1)
+      .setDepth(-1);
 
     this.createEnergyEffects();
     this.createStartBullAnimation();
@@ -72,7 +104,7 @@ export class StartScene extends Phaser.Scene {
 
     this.add
       .text(width / 2, 125, 'RED BULL', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
+        fontFamily: 'Arial, sans-serif',
         fontSize: '74px',
         fontStyle: 'bold',
         color: '#ffffff',
@@ -84,7 +116,7 @@ export class StartScene extends Phaser.Scene {
 
     this.add
       .text(width / 2, 202, 'CAN CHALLENGE', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
+        fontFamily: 'Arial, sans-serif',
         fontSize: '39px',
         fontStyle: 'bold',
         color: '#ffc400',
@@ -115,7 +147,7 @@ export class StartScene extends Phaser.Scene {
     });
 
     this.add
-      .text(width / 2, height - 46, 'USE  ←  →  PARA MOVER O TOURO', {
+      .text(width / 2, height - 46, 'TOQUE E ARRASTE PARA MOVER O TOURO', {
         fontFamily: 'Arial, sans-serif',
         fontSize: '19px',
         fontStyle: 'bold',
@@ -125,14 +157,9 @@ export class StartScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.bindNameKeyboard();
-
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      if (this.keyboardHandler) {
-        this.input.keyboard?.off('keydown', this.keyboardHandler);
-      }
+      this.destroyNameInput();
     });
-
   }
 
   private createEnergyEffects(): void {
@@ -154,7 +181,14 @@ export class StartScene extends Phaser.Scene {
 
     for (let index = 0; index < 6; index += 1) {
       const slash = this.add
-        .rectangle(-80 + index * 220, 125 + index * 95, 250, 7, index % 2 ? COLORS.red : COLORS.yellow, 0.08)
+        .rectangle(
+          -80 + index * 220,
+          125 + index * 95,
+          250,
+          7,
+          index % 2 ? COLORS.red : COLORS.yellow,
+          0.08,
+        )
         .setAngle(-16)
         .setDepth(-1)
         .setBlendMode(Phaser.BlendModes.ADD);
@@ -211,27 +245,27 @@ export class StartScene extends Phaser.Scene {
 
     this.add
       .text(width / 2, 316, 'QUAL É O SEU NOME?', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
+        fontFamily: 'Arial, sans-serif',
         fontSize: '16px',
         fontStyle: 'bold',
-        color: '#9ad9ff',
+        color: '#ffc400',
+        letterSpacing: 2,
       })
       .setOrigin(0.5);
 
     this.add.rectangle(width / 2 + 5, 372, 390, 66, 0x000000, 0.32);
     this.nameField = this.add
       .rectangle(width / 2, 366, 390, 66, COLORS.navy, 0.94)
-      .setStrokeStyle(3, COLORS.paleBlue, 0.65)
-      .setInteractive({ useHandCursor: true });
+      .setStrokeStyle(3, COLORS.paleBlue, 0.72);
 
-    this.nameText = this.add
-      .text(width / 2, 366, '', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
-        fontSize: '25px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
+    this.add.rectangle(
+      width / 2 - 174,
+      366,
+      7,
+      46,
+      COLORS.yellow,
+      1,
+    );
 
     this.nameHint = this.add
       .text(width / 2, 421, 'SEU NOME APARECERÁ NO RANKING', {
@@ -242,57 +276,164 @@ export class StartScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.nameField.on('pointerup', () => {
-      // Ao voltar do ranking, o primeiro clique seleciona o nome antigo na
-      // prática: limpa o campo para a pessoa digitar outro sem usar Backspace.
-      if (!this.nameFocused && this.playerName) {
-        this.playerName = '';
-      }
+    this.createNameInput();
+    this.refreshNameField();
+  }
+
+  private createNameInput(): void {
+    const input = document.createElement('input');
+
+    input.type = 'text';
+    input.maxLength = MAX_PLAYER_NAME_LENGTH;
+    input.value = this.playerName;
+    input.placeholder = 'TOQUE E DIGITE';
+    input.autocomplete = 'off';
+    input.autocapitalize = 'characters';
+    input.spellcheck = false;
+    input.inputMode = 'text';
+    input.enterKeyHint = 'done';
+    input.setAttribute('aria-label', 'Seu nome');
+
+    Object.assign(input.style, {
+      position: 'fixed',
+      zIndex: '1000',
+      boxSizing: 'border-box',
+      margin: '0',
+      padding: '0 28px',
+      border: '0',
+      borderRadius: '0',
+      outline: 'none',
+      background: 'transparent',
+      color: '#ffffff',
+      caretColor: '#ffc400',
+      fontFamily: 'Arial, sans-serif',
+      fontWeight: '900',
+      textAlign: 'center',
+      textTransform: 'uppercase',
+      transformOrigin: 'center center',
+      WebkitAppearance: 'none',
+      WebkitTapHighlightColor: 'transparent',
+    });
+
+    input.addEventListener('focus', () => {
       this.nameFocused = true;
       this.refreshNameField();
     });
 
-    this.refreshNameField();
+    input.addEventListener('blur', () => {
+      this.nameFocused = false;
+      this.refreshNameField();
+    });
+
+    input.addEventListener('input', () => {
+      const sanitizedName = this.sanitizePlayerName(input.value).slice(
+        0,
+        MAX_PLAYER_NAME_LENGTH,
+      );
+
+      if (input.value !== sanitizedName) {
+        input.value = sanitizedName;
+      }
+
+      this.playerName = sanitizedName;
+      this.refreshNameField();
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') {
+        return;
+      }
+
+      event.preventDefault();
+      input.blur();
+      this.startGame();
+    });
+
+    document.body.appendChild(input);
+    this.nameInput = input;
+
+    this.resizeNameInputHandler = () => {
+      this.positionNameInput();
+    };
+
+    window.addEventListener('resize', this.resizeNameInputHandler);
+    window.visualViewport?.addEventListener(
+      'resize',
+      this.resizeNameInputHandler,
+    );
+    this.scale.on(
+      Phaser.Scale.Events.RESIZE,
+      this.resizeNameInputHandler,
+    );
+
+    this.positionNameInput();
   }
 
-  private bindNameKeyboard(): void {
-    if (!this.input.keyboard) {
+  private positionNameInput(): void {
+    if (!this.nameInput) {
       return;
     }
 
-    this.keyboardHandler = (event: KeyboardEvent) => {
-      if (!this.nameFocused) {
-        return;
-      }
+    const canvasBounds = this.game.canvas.getBoundingClientRect();
+    const scaleX = canvasBounds.width / this.scale.width;
+    const scaleY = canvasBounds.height / this.scale.height;
+    const fieldWidth = 390;
+    const fieldHeight = 66;
+    const fieldCenterX = this.scale.width / 2;
+    const fieldCenterY = 366;
 
-      if (event.key === 'Backspace') {
-        event.preventDefault();
-        this.playerName = this.playerName.slice(0, -1);
-      } else if (event.key === 'Enter') {
-        this.startGame();
-        return;
-      } else if (event.key.length === 1 && this.playerName.length < MAX_PLAYER_NAME_LENGTH) {
-        const candidate = this.sanitizePlayerName(this.playerName + event.key);
-        this.playerName = candidate.slice(0, MAX_PLAYER_NAME_LENGTH);
-      } else {
-        return;
-      }
+    this.nameInput.style.left =
+      `${canvasBounds.left + (fieldCenterX - fieldWidth / 2) * scaleX}px`;
+    this.nameInput.style.top =
+      `${canvasBounds.top + (fieldCenterY - fieldHeight / 2) * scaleY}px`;
+    this.nameInput.style.width = `${fieldWidth * scaleX}px`;
+    this.nameInput.style.height = `${fieldHeight * scaleY}px`;
+    this.nameInput.style.fontSize = `${Math.max(16, 25 * scaleY)}px`;
+    this.nameInput.style.lineHeight = `${fieldHeight * scaleY}px`;
+  }
 
-      this.refreshNameField();
-    };
+  private setNameInputVisible(visible: boolean): void {
+    if (!this.nameInput) {
+      return;
+    }
 
-    this.input.keyboard.on('keydown', this.keyboardHandler);
+    this.nameInput.style.display = visible ? 'block' : 'none';
+
+    if (visible) {
+      this.positionNameInput();
+    } else {
+      this.nameInput.blur();
+    }
+  }
+
+  private destroyNameInput(): void {
+    if (this.resizeNameInputHandler) {
+      window.removeEventListener('resize', this.resizeNameInputHandler);
+      window.visualViewport?.removeEventListener(
+        'resize',
+        this.resizeNameInputHandler,
+      );
+      this.scale.off(
+        Phaser.Scale.Events.RESIZE,
+        this.resizeNameInputHandler,
+      );
+    }
+
+    this.nameInput?.remove();
+    this.nameInput = undefined;
+    this.resizeNameInputHandler = undefined;
   }
 
   private refreshNameField(): void {
-    const placeholder = this.nameFocused ? '|' : 'CLIQUE E DIGITE';
-    this.nameText?.setText(this.playerName || placeholder);
-    this.nameText?.setColor(this.playerName ? '#ffffff' : '#9ad9ff');
     this.nameField?.setStrokeStyle(
       this.nameFocused ? 4 : 3,
       this.nameFocused ? COLORS.yellow : COLORS.paleBlue,
       this.nameFocused ? 1 : 0.65,
     );
+
+    if (this.nameInput && this.nameInput.value !== this.playerName) {
+      this.nameInput.value = this.playerName;
+    }
   }
 
   private startGame(): void {
@@ -300,10 +441,12 @@ export class StartScene extends Phaser.Scene {
       return;
     }
 
-    const name = this.sanitizePlayerName(this.playerName);
+    const name = this.sanitizePlayerName(this.playerName).trim();
 
     if (!name) {
       this.nameFocused = true;
+      this.setNameInputVisible(true);
+      this.nameInput?.focus({ preventScroll: true });
       this.nameHint?.setText('DIGITE SEU NOME PARA COMEÇAR').setColor('#ffc400');
       this.nameField?.setStrokeStyle(4, COLORS.yellow, 1);
       this.tweens.add({
@@ -333,6 +476,7 @@ export class StartScene extends Phaser.Scene {
     this.isStarting = true;
     this.nameFocused = false;
     this.input.enabled = false;
+    this.setNameInputVisible(false);
 
     // Uma segunda cópia, já nítida, cobre suavemente a interface. Como usa o
     // mesmo asset da GameScene, a troca final parece uma continuação da corrida.
@@ -351,7 +495,14 @@ export class StartScene extends Phaser.Scene {
     const speedLines: Phaser.GameObjects.Rectangle[] = [];
     for (let index = 0; index < 8; index += 1) {
       const line = this.add
-        .rectangle(-180 - index * 85, 520 + (index % 4) * 36, 185, 6, index % 3 === 0 ? COLORS.yellow : COLORS.paleBlue, 0.7)
+        .rectangle(
+          -180 - index * 85,
+          520 + (index % 4) * 36,
+          185,
+          6,
+          index % 3 === 0 ? COLORS.yellow : COLORS.paleBlue,
+          0.7,
+        )
         .setDepth(195)
         .setAngle(-7);
       speedLines.push(line);
@@ -367,7 +518,7 @@ export class StartScene extends Phaser.Scene {
 
     const callout = this.add
       .text(width / 2, 112, 'PREPARE-SE!', {
-        fontFamily: 'Arial Black, Impact, Arial, sans-serif',
+        fontFamily: 'Arial, sans-serif',
         fontSize: '48px',
         fontStyle: 'bold',
         color: '#ffffff',
@@ -474,167 +625,333 @@ export class StartScene extends Phaser.Scene {
     color: number,
     onClick: () => void,
   ): Phaser.GameObjects.Container {
-    const shadow = this.add.rectangle(5, 7, width, height, 0x000000, 0.3).setOrigin(0.5);
-    const body = this.add
-      .rectangle(0, 0, width, height, color, 1)
-      .setOrigin(0.5)
-      .setStrokeStyle(4, COLORS.white, 0.95)
-      .setInteractive({ useHandCursor: true });
+    const shadow = this.createBeveledGraphics(
+      width,
+      height,
+      0x000000,
+      0.34,
+    ).setPosition(6, 8);
+
+    const body = this.createBeveledGraphics(
+      width,
+      height,
+      color,
+      1,
+      COLORS.white,
+      3,
+      0.94,
+    );
+
+    const accent = this.add.rectangle(
+      -width / 2 + 31,
+      0,
+      7,
+      height - 20,
+      COLORS.yellow,
+      1,
+    );
+
     const text = this.add
       .text(0, 0, label, {
-        fontFamily: 'Arial Black, Arial, sans-serif',
-        fontSize: height >= 80 ? '34px' : '25px',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: height >= 70 ? '30px' : '23px',
         fontStyle: 'bold',
         color: '#ffffff',
       })
       .setOrigin(0.5);
 
-    const button = this.add.container(x, y, [shadow, body, text]);
-    body.on('pointerover', () => button.setScale(1.04));
-    body.on('pointerout', () => button.setScale(1));
-    body.on('pointerdown', () => button.setScale(0.98));
-    body.on('pointerup', () => {
-      button.setScale(1.04);
+    const hitArea = this.add
+      .zone(0, 0, width, height)
+      .setInteractive({ useHandCursor: true });
+
+    const button = this.add.container(x, y, [
+      shadow,
+      body,
+      accent,
+      text,
+      hitArea,
+    ]);
+
+    hitArea.on('pointerover', () => button.setScale(1.035));
+    hitArea.on('pointerout', () => button.setScale(1));
+    hitArea.on('pointerdown', () => button.setScale(0.97));
+    hitArea.on('pointerup', () => {
+      button.setScale(1);
       onClick();
     });
 
     return button;
   }
 
+  private createBeveledGraphics(
+    width: number,
+    height: number,
+    fillColor: number,
+    fillAlpha: number,
+    strokeColor?: number,
+    strokeWidth = 0,
+    strokeAlpha = 1,
+  ): Phaser.GameObjects.Graphics {
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const bevel = Math.min(22, halfHeight);
+    const points = [
+      -halfWidth + bevel,
+      -halfHeight,
+      halfWidth - bevel,
+      -halfHeight,
+      halfWidth,
+      0,
+      halfWidth - bevel,
+      halfHeight,
+      -halfWidth + bevel,
+      halfHeight,
+      -halfWidth,
+      0,
+    ];
+    const graphics = this.add.graphics();
+
+    graphics.fillStyle(fillColor, fillAlpha);
+    if (strokeColor !== undefined && strokeWidth > 0) {
+      graphics.lineStyle(strokeWidth, strokeColor, strokeAlpha);
+    }
+
+    graphics.beginPath();
+    graphics.moveTo(points[0], points[1]);
+    for (let index = 2; index < points.length; index += 2) {
+      graphics.lineTo(points[index], points[index + 1]);
+    }
+    graphics.closePath();
+    graphics.fillPath();
+
+    if (strokeColor !== undefined && strokeWidth > 0) {
+      graphics.strokePath();
+    }
+
+    return graphics;
+  }
+
   private showTutorial(): void {
     if (this.tutorial?.active) {
       this.tutorial.setVisible(true);
+      this.setNameInputVisible(false);
       return;
     }
 
     const { width, height } = this.scale;
-    const overlay = this.add.rectangle(0, 0, width, height, 0x020b1d, 0.78).setOrigin(0).setInteractive();
+    const centerX = width / 2;
+    const leftCardX = centerX - 180;
+    const rightCardX = centerX + 180;
 
-    const panelShadow = this.add.rectangle(width / 2 + 10, height / 2 + 12, 820, 560, 0x000000, 0.35);
+    this.setNameInputVisible(false);
+
+    const overlay = this.add
+      .rectangle(0, 0, width, height, 0x020b1d, 0.86)
+      .setOrigin(0)
+      .setInteractive();
+
+    const panelShadow = this.add.rectangle(
+      centerX + 10,
+      height / 2 + 12,
+      840,
+      580,
+      0x000000,
+      0.4,
+    );
+    // Layout v4: hierarquia curta e sem caixas competindo com o conteúdo.
     const panel = this.add
-      .rectangle(width / 2, height / 2, 820, 560, 0xf8faff, 1)
-      .setStrokeStyle(7, COLORS.yellow, 1);
+      .rectangle(centerX, height / 2, 840, 580, COLORS.navy, 0.98)
+      .setStrokeStyle(2, COLORS.paleBlue, 0.24);
 
-    const header = this.add.rectangle(width / 2, 139, 820, 70, COLORS.blue, 1);
+    const redBar = this.add.rectangle(centerX, 98, 840, 8, COLORS.red, 1);
+    const yellowBar = this.add.rectangle(centerX, 105, 840, 5, COLORS.yellow, 1);
 
     const title = this.add
-      .text(width / 2, 139, 'COMO JOGAR', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
+      .text(centerX, 142, 'COMO JOGAR', {
+        fontFamily: 'Arial, sans-serif',
         fontSize: '38px',
         fontStyle: 'bold',
         color: '#ffffff',
       })
       .setOrigin(0.5);
 
-    const timerBadge = this.add.circle(250, 232, 36, COLORS.red).setStrokeStyle(4, COLORS.white, 1);
-    const timerText = this.add
-      .text(250, 232, '40s', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
-        fontSize: '21px',
+    const titleRule = this.add.rectangle(centerX, 178, 72, 3, COLORS.yellow, 1);
+
+    const goalTitle = this.add
+      .text(centerX, 211, 'MARQUE O MÁXIMO DE PONTOS', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '22px',
         fontStyle: 'bold',
         color: '#ffffff',
+        align: 'center',
       })
       .setOrigin(0.5);
 
-    const goal = this.add
-      .text(310, 232, 'PEGUE O MÁXIMO DE LATINHAS\nANTES QUE O TEMPO ACABE!', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
-        fontSize: '24px',
+    const goalSubtitle = this.add
+      .text(centerX, 240, 'VOCÊ TEM 40 SEGUNDOS', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '14px',
         fontStyle: 'bold',
-        color: '#061d49',
-        align: 'left',
-        lineSpacing: 5,
+        color: '#ffc400',
+        letterSpacing: 2,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5);
 
-    // Dois cards com o mesmo tamanho mantêm ícones e textos alinhados.
-    const collectCard = this.add
-      .rectangle(335, 395, 330, 190, 0xeaf1ff, 1)
-      .setStrokeStyle(3, COLORS.blue, 0.28);
-    const avoidCard = this.add
-      .rectangle(689, 395, 330, 190, 0xffedf1, 1)
-      .setStrokeStyle(3, COLORS.red, 0.28);
+    // Caixas dos dois objetivos: fortes, alinhadas e sem poluir a tela.
+    const collectBoxShadow = this.add.rectangle(
+      leftCardX + 6,
+      371,
+      340,
+      168,
+      0x000000,
+      0.3,
+    );
+    const avoidBoxShadow = this.add.rectangle(
+      rightCardX + 6,
+      371,
+      340,
+      168,
+      0x000000,
+      0.3,
+    );
 
-    const canIcon = this.add.image(250, 395, 'tutorial-can');
-    canIcon.setScale(Math.min(88 / canIcon.width, 116 / canIcon.height));
+    const collectBox = this.add
+      .rectangle(leftCardX, 365, 340, 168, COLORS.blue, 0.88)
+      .setStrokeStyle(2, COLORS.paleBlue, 0.58);
+    const avoidBox = this.add
+      .rectangle(rightCardX, 365, 340, 168, COLORS.blue, 0.88)
+      .setStrokeStyle(2, COLORS.paleBlue, 0.58);
+
+    const collectBoxAccent = this.add.rectangle(
+      leftCardX - 164,
+      365,
+      6,
+      142,
+      COLORS.yellow,
+      1,
+    );
+    const avoidBoxAccent = this.add.rectangle(
+      rightCardX - 164,
+      365,
+      6,
+      142,
+      COLORS.red,
+      1,
+    );
+
+    const canIcon = this.add.image(leftCardX - 98, 365, 'tutorial-can');
+    canIcon.setScale(
+      Math.min(80 / canIcon.width, 108 / canIcon.height),
+    );
     const canLabel = this.add
-      .text(320, 367, 'COLETE', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
-        fontSize: '27px',
-        color: '#0b3b83',
-      })
-      .setOrigin(0, 0.5);
-    const canHelp = this.add
-      .text(325, 412, 'Cada latinha\nvale 1 ponto', {
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '18px',
-        color: '#42516a',
-        lineSpacing: 4,
-      })
-      .setOrigin(0, 0.5);
-
-    const bombGlow = this.add.circle(620, 391, 66, COLORS.red, 0.14);
-    const bombIcon = this.add.image(620, 391, 'tutorial-bomb');
-    bombIcon.setScale(Math.min(112 / bombIcon.width, 126 / bombIcon.height));
-    const bombLabel = this.add
-      .text(690, 367, 'DESVIE', {
-        fontFamily: 'Arial Black, Arial, sans-serif',
-        fontSize: '27px',
-        color: '#db0a40',
-      })
-      .setOrigin(0, 0.5);
-    const bombHelp = this.add
-      .text(690, 420, 'Não deixe a bomba\nencostar no touro\n(-5 pontos)', {
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '18px',
-        color: '#42516a',
-        lineSpacing: 4,
-      })
-      .setOrigin(0, 0.5);
-
-    const keyLeft = this.add.rectangle(320, 525, 52, 42, COLORS.navy, 1).setStrokeStyle(2, COLORS.yellow);
-    const keyRight = this.add.rectangle(384, 525, 52, 42, COLORS.navy, 1).setStrokeStyle(2, COLORS.yellow);
-    const arrowLeft = this.add
-      .text(320, 525, '←', { fontFamily: 'Arial Black', fontSize: '29px', color: '#ffffff' })
-      .setOrigin(0.5);
-    const arrowRight = this.add
-      .text(384, 525, '→', { fontFamily: 'Arial Black', fontSize: '29px', color: '#ffffff' })
-      .setOrigin(0.5);
-    const hint = this.add
-      .text(420, 525, 'USE AS SETAS PARA MOVER O TOURO', {
+      .text(leftCardX + 50, 350, 'COLETE LATINHAS', {
         fontFamily: 'Arial, sans-serif',
         fontSize: '18px',
         fontStyle: 'bold',
-        color: '#061d49',
+        color: '#ffffff',
+        align: 'center',
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5);
+    const canHelp = this.add
+      .text(leftCardX + 50, 389, '+1 PONTO', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#ffc400',
+        align: 'center',
+      })
+      .setOrigin(0.5);
 
-    const closeButton = this.createButton(width / 2, 608, 280, 66, 'ENTENDI!', COLORS.red, () => {
-      this.tutorial?.setVisible(false);
+    const bombIcon = this.add.image(rightCardX - 98, 365, 'tutorial-bomb');
+    bombIcon.setScale(
+      Math.min(104 / bombIcon.width, 116 / bombIcon.height),
+    );
+    const bombLabel = this.add
+      .text(rightCardX + 50, 350, 'DESVIE DAS BOMBAS', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    const bombHelp = this.add
+      .text(rightCardX + 50, 389, '−5 PONTOS', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#ff6b88',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
+    const touchLine = this.add.rectangle(
+      centerX,
+      493,
+      210,
+      2,
+      COLORS.paleBlue,
+      0.42,
+    );
+    const touchPoint = this.add
+      .circle(centerX - 84, 493, 9, COLORS.yellow, 1)
+      .setStrokeStyle(2, COLORS.white, 0.9);
+    const hint = this.add
+      .text(centerX, 528, 'TOQUE E ARRASTE PARA MOVER', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#9ad9ff',
+        letterSpacing: 1.5,
+      })
+      .setOrigin(0.5);
+
+    this.tweens.add({
+      targets: touchPoint,
+      x: centerX + 84,
+      duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
     });
+
+    const closeButton = this.createButton(
+      centerX,
+      622,
+      290,
+      66,
+      'ENTENDI!',
+      COLORS.red,
+      () => {
+        this.tutorial?.setVisible(false);
+        this.setNameInputVisible(true);
+      },
+    );
 
     this.tutorial = this.add.container(0, 0, [
       overlay,
       panelShadow,
       panel,
-      header,
+      redBar,
+      yellowBar,
       title,
-      timerBadge,
-      timerText,
-      goal,
-      collectCard,
-      avoidCard,
+      titleRule,
+      goalTitle,
+      goalSubtitle,
+      collectBoxShadow,
+      avoidBoxShadow,
+      collectBox,
+      avoidBox,
+      collectBoxAccent,
+      avoidBoxAccent,
       canIcon,
       canLabel,
       canHelp,
-      bombGlow,
       bombIcon,
       bombLabel,
       bombHelp,
-      keyLeft,
-      keyRight,
-      arrowLeft,
-      arrowRight,
+      touchLine,
+      touchPoint,
       hint,
       closeButton,
     ]);
