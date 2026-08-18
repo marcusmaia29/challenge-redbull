@@ -3,7 +3,7 @@
 Jogo 2D simples, interativo e de curta duracao, pensado para ativacoes presenciais
 da marca em iPad (feiras de carreira, volta as aulas, feiras do livro, festivais).
 
-Roda apenas localmente no navegador: sem backend, sem banco de dados e sem deploy.
+Sem backend, armazenamento de dados em localstorage.
 
 ## Tecnologias
 
