@@ -32,6 +32,7 @@ interface EndSceneData {
 
 interface RankingEntry {
   id: string;
+  name: string;
   score: number;
   playedAt: number;
 }
@@ -40,6 +41,7 @@ export class EndScene extends Phaser.Scene {
   private score = 0;
   private totalCans = 0;
   private currentEntryId = '';
+  private playerName = 'JOGADOR';
   private ranking: RankingEntry[] = [];
   private currentPosition = 1;
 
@@ -89,6 +91,9 @@ export class EndScene extends Phaser.Scene {
 
     this.rankingRows = [];
     this.isTransitioning = false;
+    this.playerName = this.sanitizePlayerName(
+      this.registry.get('playerName'),
+    );
 
     this.recordCurrentScore();
     this.createBackground();
@@ -935,7 +940,7 @@ export class EndScene extends Phaser.Scene {
       .text(
         RANKING_LAYOUT.playerX,
         0,
-        isCurrent ? 'VOCÊ' : 'JOGADOR',
+        entry.name,
         {
           fontFamily: 'Arial Black, Impact, Arial, sans-serif',
           fontSize: '19px',
@@ -945,6 +950,8 @@ export class EndScene extends Phaser.Scene {
         },
       )
       .setOrigin(0, 0.5);
+
+    this.fitTextToWidth(playerText, 255);
 
     const scoreText = this.add
       .text(
@@ -1675,6 +1682,7 @@ export class EndScene extends Phaser.Scene {
           .toString(36)
           .slice(2, 10),
 
+      name: this.playerName,
       score: this.score,
       playedAt: Date.now(),
     };
@@ -1752,6 +1760,8 @@ export class EndScene extends Phaser.Scene {
 
             return (
               typeof candidate.id === 'string' &&
+              (candidate.name === undefined ||
+                typeof candidate.name === 'string') &&
               typeof candidate.score === 'number' &&
               Number.isFinite(candidate.score) &&
               typeof candidate.playedAt === 'number' &&
@@ -1762,6 +1772,9 @@ export class EndScene extends Phaser.Scene {
         .map((entry) => {
           return {
             id: entry.id,
+
+            // Mantém compatibilidade com partidas salvas antes dos nomes.
+            name: this.sanitizePlayerName(entry.name),
 
             score:
               this.toNonNegativeInteger(
@@ -1808,6 +1821,20 @@ export class EndScene extends Phaser.Scene {
     position: number,
   ): string {
     return `${position}º`;
+  }
+
+  private sanitizePlayerName(value: unknown): string {
+    if (typeof value !== 'string') {
+      return 'JOGADOR';
+    }
+
+    const sanitized = value
+      .replace(/[^A-Za-zÀ-ÿ0-9 .'-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 16);
+
+    return sanitized || 'JOGADOR';
   }
 
   private toNonNegativeInteger(
