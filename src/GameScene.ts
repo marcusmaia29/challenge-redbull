@@ -79,6 +79,8 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     // Caminho relativo (sem barra inicial) para funcionar tambem se o jogo
     // for publicado em uma subpasta.
+    this.load.image('cenario', 'assets/cenario_chalenge_redbull.png');
+
     CAN_TYPES.forEach((type) => {
       this.load.image(`can-${type.id}`, `assets/cans/${type.id}.png`);
     });
@@ -100,6 +102,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.createPlaceholderTextures();
+    this.createBackground();
     this.createPlayer();
     this.createHud();
 
@@ -191,11 +194,22 @@ export class GameScene extends Phaser.Scene {
     graphics.destroy();
   }
 
-  private createPlayer(): void {
+  /**
+   * Cenario oficial cobrindo a tela inteira. O PNG e 3:2 e o jogo e 4:3, entao
+   * escalamos pelo maior fator e centralizamos: sobra um corte nas laterais em
+   * vez de deformar a arte.
+   */
+  private createBackground(): void {
     const { width, height } = this.scale;
 
-    // Linha de chao apenas como referencia visual do cenario.
-    this.add.rectangle(width / 2, height - 24, width, 6, 0x333a45);
+    const background = this.add.image(width / 2, height / 2, 'cenario');
+    const scale = Math.max(width / background.width, height / background.height);
+    background.setScale(scale);
+    background.setDepth(-10);
+  }
+
+  private createPlayer(): void {
+    const { width, height } = this.scale;
 
     this.player = this.physics.add.sprite(width / 2, height - PLAYER_BOTTOM_OFFSET, 'player');
     this.player.setCollideWorldBounds(true);
@@ -203,10 +217,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHud(): void {
-    const style = { fontFamily: 'sans-serif', fontSize: '32px', color: '#ffffff' };
+    // O contorno escuro mantem o HUD legivel sobre o ceu claro do cenario.
+    const style = {
+      fontFamily: 'sans-serif',
+      fontSize: '32px',
+      color: '#ffffff',
+      stroke: '#0a1730',
+      strokeThickness: 6,
+    };
 
     this.scoreText = this.add.text(24, 20, '', style);
-    this.streakText = this.add.text(24, 60, '', { ...style, fontSize: '24px', color: '#b9c2cf' });
+    this.streakText = this.add.text(24, 60, '', { ...style, fontSize: '24px', color: '#e8edf5' });
     this.timeText = this.add.text(this.scale.width - 24, 20, '', style).setOrigin(1, 0);
 
     this.powerUpText = this.add
