@@ -28,8 +28,14 @@ const SPAWN_MARGIN = 60; // impede spawn colado nas bordas
 // Altura das latas em tela. A largura acompanha a proporcao de cada PNG.
 const CAN_HEIGHT = 120;
 
-// Placeholder ainda sem arte definitiva.
-const BOMB_RADIUS = 28;
+// Bomba. A arte (public/assets/bomb.png) tem 180x200 e a esfera fica na parte
+// de baixo: a hitbox cobre so ela, ignorando pavio e estrela, para nao explodir
+// o jogador por um pixel de faisca.
+const BOMB_HEIGHT = 110; // altura em tela
+const BOMB_BODY_WIDTH = 146;
+const BOMB_BODY_HEIGHT = 118;
+const BOMB_BODY_OFFSET_X = 17;
+const BOMB_BODY_OFFSET_Y = 78;
 
 // --- Touro -----------------------------------------------------------------
 // Os 4 frames vivem em public/assets/player/bull_idle_<i>.png, recortados da
@@ -102,6 +108,7 @@ export class GameScene extends Phaser.Scene {
     // Caminho relativo (sem barra inicial) para funcionar tambem se o jogo
     // for publicado em uma subpasta.
     this.load.image('cenario', 'assets/cenario_chalenge_redbull.png');
+    this.load.image('bomb', 'assets/bomb.png');
 
     CAN_TYPES.forEach((type) => {
       this.load.image(`can-${type.id}`, `assets/cans/${type.id}.png`);
@@ -130,7 +137,6 @@ export class GameScene extends Phaser.Scene {
       this.cansByType[type.id] = 0;
     });
 
-    this.createPlaceholderTextures();
     this.createBackground();
     this.createPlayerAnimations();
     this.createPlayer();
@@ -184,28 +190,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   // --- setup -----------------------------------------------------------------
-
-  /**
-   * Placeholder da bomba, ainda sem arte definitiva. Ao receber o sprite,
-   * carregue-o no preload() com a chave 'bomb' e remova este metodo.
-   */
-  private createPlaceholderTextures(): void {
-    this.makeCircleTexture('bomb', BOMB_RADIUS, 0x11151c);
-  }
-
-  private makeCircleTexture(key: string, radius: number, color: number): void {
-    if (this.textures.exists(key)) {
-      return;
-    }
-
-    const graphics = this.add.graphics();
-    graphics.fillStyle(color, 1);
-    graphics.fillCircle(radius, radius, radius);
-    graphics.lineStyle(4, 0xff4b4b, 1);
-    graphics.strokeCircle(radius, radius, radius - 2);
-    graphics.generateTexture(key, radius * 2, radius * 2);
-    graphics.destroy();
-  }
 
   /**
    * Cenario oficial cobrindo a tela inteira. O PNG e 3:2 e o jogo e 4:3, entao
@@ -343,7 +327,12 @@ export class GameScene extends Phaser.Scene {
 
     const x = Phaser.Math.Between(SPAWN_MARGIN, this.scale.width - SPAWN_MARGIN);
 
-    const bomb = this.bombs.create(x, -BOMB_RADIUS * 2, 'bomb') as Phaser.Physics.Arcade.Sprite;
+    const bomb = this.bombs.create(x, -BOMB_HEIGHT, 'bomb') as Phaser.Physics.Arcade.Sprite;
+
+    bomb.setScale(BOMB_HEIGHT / bomb.height);
+    bomb.body?.setSize(BOMB_BODY_WIDTH, BOMB_BODY_HEIGHT);
+    bomb.body?.setOffset(BOMB_BODY_OFFSET_X, BOMB_BODY_OFFSET_Y);
+
     bomb.setVelocityY(Phaser.Math.Between(BOMB_MIN_FALL_SPEED, BOMB_MAX_FALL_SPEED));
   }
 
