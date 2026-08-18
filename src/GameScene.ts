@@ -47,6 +47,13 @@ const BULL_BODY_HEIGHT = 220;
 const BULL_BODY_OFFSET_X = 100;
 const BULL_BODY_OFFSET_Y = 240;
 
+// Voo (x2). Nos frames com asas o tronco fica mais baixo na celula, entao a
+// hitbox desce para nao virar "caixa de asa".
+const BULL_FLY_BODY_OFFSET_Y = 270;
+const BULL_FLY_HEIGHT = 280; // altura do voo acima da base da tela
+const BULL_FLY_RISE_DURATION = 420; // ms para subir/descer
+const BULL_FLY_BOB = 14; // balanco vertical enquanto voa
+
 /**
  * Sabores disponiveis. Cada `id` corresponde a public/assets/cans/<id>.png
  * e vira a chave de textura `can-<id>` e a chave do contador por sabor.
@@ -73,7 +80,7 @@ export class GameScene extends Phaser.Scene {
   private cans!: Phaser.Physics.Arcade.Group;
   private bombs!: Phaser.Physics.Arcade.Group;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
-  private powerUpPulse?: Phaser.Tweens.Tween;
+  private flyTween?: Phaser.Tweens.Tween;
 
   private scoreText!: Phaser.GameObjects.Text;
   private timeText!: Phaser.GameObjects.Text;
@@ -100,9 +107,10 @@ export class GameScene extends Phaser.Scene {
       this.load.image(`can-${type.id}`, `assets/cans/${type.id}.png`);
     });
 
-    // Frames do touro, um arquivo por quadro.
+    // Frames do touro, um arquivo por quadro: no chao e voando.
     for (let i = 0; i < BULL_FRAME_COUNT; i++) {
       this.load.image(`bull-idle-${i}`, `assets/player/bull_idle_${i}.png`);
+      this.load.image(`bull-fly-${i}`, `assets/player/bull_fly_${i}.png`);
     }
 
     // A bomba ainda usa placeholder gerado em runtime.
@@ -115,7 +123,7 @@ export class GameScene extends Phaser.Scene {
     this.streak = 0;
     this.timeLeft = MATCH_DURATION_SECONDS;
     this.powerUpActive = false;
-    this.powerUpPulse = undefined;
+    this.flyTween = undefined;
     this.matchOver = false;
     this.cansByType = {};
     CAN_TYPES.forEach((type) => {
@@ -214,12 +222,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Animacoes do jogador. As animacoes ficam no gerenciador global do Phaser,
-   * por isso o guarda contra recriacao a cada nova partida.
-   *
-   * Quando chegar a public/assets/player/bull_fly_<i>.png, carregue os frames
-   * no preload() e registre aqui uma segunda animacao 'bull-fly' no mesmo
-   * formato — depois basta troca-la em activatePowerUp/deactivatePowerUp.
+   * Animacoes do jogador. Ficam no gerenciador global do Phaser, por isso o
+   * guarda contra recriacao a cada nova partida.
    */
   private createPlayerAnimations(): void {
     if (this.anims.exists('bull-idle')) {
@@ -230,6 +234,14 @@ export class GameScene extends Phaser.Scene {
       key: 'bull-idle',
       frames: Array.from({ length: BULL_FRAME_COUNT }, (_, i) => ({ key: `bull-idle-${i}` })),
       frameRate: 5,
+      repeat: -1,
+    });
+
+    // Bater de asas mais rapido que o idle, para o voo parecer ativo.
+    this.anims.create({
+      key: 'bull-fly',
+      frames: Array.from({ length: BULL_FRAME_COUNT }, (_, i) => ({ key: `bull-fly-${i}` })),
+      frameRate: 10,
       repeat: -1,
     });
   }
@@ -405,50 +417,100 @@ export class GameScene extends Phaser.Scene {
     this.showFloatingText(`-${BOMB_PENALTY}`, '#ff6b6b');
 
     // setTintFill (e nao setTint): o touro e vermelho puro e o tint comum,
-    // por ser multiplicativo, quase nao aparece nele.
+    // por ser multiplicativo, quase nao apareceria nele.
     this.player.setTintFill(0xffffff);
-    this.time.delayedCall(220, () => this.refreshPlayerTint());
-  }
-
-  /** Cor do touro conforme o estado atual: dourado no x2, natural fora dele. */
-  private refreshPlayerTint(): void {
-    if (this.powerUpActive) {
-      this.player.setTintFill(0xffc21e);
-    } else {
-      this.player.clearTint();
-    }
+    this.time.delayedCall(220, () => this.player.clearTint());
   }
 
   private activatePowerUp(): void {
     this.powerUpActive = true;
     this.streak = 0; // obriga a construir uma nova sequencia
     this.powerUpText.setVisible(true);
-    this.refreshPlayerTint();
+    this.showPowerUpBanner();
 
-    // Pulsacao discreta enquanto o x2 durar. Quando existir 'bull-fly',
-    // troque a animacao aqui: this.player.play('bull-fly').
-    this.powerUpPulse = this.tweens.add({
+    // Troca para o touro alado e sobe a hitbox junto com o tronco.
+    this.player.play('bull-fly');
+    this.player.body?.setOffset(BULL_BODY_OFFSET_X, BULL_FLY_BODY_OFFSET_Y);
+
+    this.flyTween?.remove();
+    this.flyTween = this.tweens.add({
       targets: this.player,
-      scaleX: BULL_SCALE * 1.12,
-      scaleY: BULL_SCALE * 1.12,
-      duration: 320,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+      y: this.scale.height - BULL_FLY_HEIGHT,
+      duration: BULL_FLY_RISE_DURATION,
+      ease: 'Back.easeOut',
+      onComplete: () => this.startFlyBob(),
     });
 
     this.time.delayedCall(POWERUP_DURATION, this.deactivatePowerUp, undefined, this);
   }
 
+  /** Balanco suave no ar, so enquanto o voo estiver ativo. */
+  private startFlyBob(): void {
+    if (!this.powerUpActive) {
+      return;
+    }
+
+    this.flyTween = this.tweens.add({
+      targets: this.player,
+      y: this.scale.height - BULL_FLY_HEIGHT - BULL_FLY_BOB,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
   private deactivatePowerUp(): void {
     this.powerUpActive = false;
     this.powerUpText.setVisible(false);
-    this.refreshPlayerTint();
 
-    // Volta ao tamanho normal (e, futuramente, a animacao 'bull-idle').
-    this.powerUpPulse?.remove();
-    this.powerUpPulse = undefined;
-    this.player.setScale(BULL_SCALE);
+    // Pousa e volta ao touro sem asas.
+    this.flyTween?.remove();
+    this.flyTween = this.tweens.add({
+      targets: this.player,
+      y: this.scale.height - PLAYER_BOTTOM_OFFSET,
+      duration: BULL_FLY_RISE_DURATION,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        this.player.play('bull-idle');
+        this.player.body?.setOffset(BULL_BODY_OFFSET_X, BULL_BODY_OFFSET_Y);
+      },
+    });
+  }
+
+  /** O momento do 10/10: anuncio curto no centro da tela. */
+  private showPowerUpBanner(): void {
+    const banner = this.add
+      .text(this.scale.width / 2, this.scale.height / 2 - 90, 'TE DÁ AAASAS!', {
+        fontFamily: 'sans-serif',
+        fontSize: '76px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#0a1730',
+        strokeThickness: 10,
+      })
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setScale(0.4)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: banner,
+      scale: 1,
+      alpha: 1,
+      duration: 260,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: banner,
+          alpha: 0,
+          y: banner.y - 50,
+          delay: 800,
+          duration: 400,
+          onComplete: () => banner.destroy(),
+        });
+      },
+    });
   }
 
   private removeOffscreen(group: Phaser.Physics.Arcade.Group): void {
