@@ -25,24 +25,30 @@ const POWERUP_MULTIPLIER = 2;
 
 const SPAWN_MARGIN = 60; // impede spawn colado nas bordas
 
-// Tamanhos dos placeholders. Ao trocar por PNG, viram apenas referencia.
+// Altura das latas em tela. A largura acompanha a proporcao de cada PNG.
+const CAN_HEIGHT = 120;
+
+// Tamanhos dos placeholders ainda sem arte definitiva (jogador e bomba).
 const PLAYER_WIDTH = 120;
 const PLAYER_HEIGHT = 90;
-const CAN_WIDTH = 46;
-const CAN_HEIGHT = 78;
 const BOMB_RADIUS = 28;
 
 /**
- * Sabores disponiveis. Cada item gera uma textura placeholder `can-<id>`.
- * Quando os PNGs definitivos chegarem, carregue-os no preload() usando
- * exatamente essas mesmas chaves e apague createPlaceholderTextures():
- * o resto da logica continua funcionando sem alteracao.
+ * Sabores disponiveis. Cada `id` corresponde a public/assets/cans/<id>.png
+ * e vira a chave de textura `can-<id>` e a chave do contador por sabor.
+ * Para incluir um novo sabor, basta adicionar o PNG e uma linha aqui.
  */
 const CAN_TYPES = [
-  { id: 'original', label: 'Original', color: 0x1c3f94 },
-  { id: 'sugarfree', label: 'Sugar Free', color: 0xa8b0bd },
-  { id: 'watermelon', label: 'Watermelon', color: 0xe0245e },
-  { id: 'tropical', label: 'Tropical', color: 0xf2b705 },
+  { id: 'original', label: 'Original' },
+  { id: 'zero', label: 'Zero' },
+  { id: 'sugarfree', label: 'Sugarfree' },
+  { id: 'tropical', label: 'Tropical' },
+  { id: 'amora', label: 'Amora' },
+  { id: 'ice', label: 'Ice' },
+  { id: 'maca', label: 'Maçã' },
+  { id: 'nectarina', label: 'Nectarina' },
+  { id: 'pomelo', label: 'Pomelo' },
+  { id: 'pessego', label: 'Pêssego' },
 ];
 
 /**
@@ -71,8 +77,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Sem assets externos ainda. Os sprites definitivos (touro, latas, bomba,
-    // background) serao carregados aqui.
+    // Caminho relativo (sem barra inicial) para funcionar tambem se o jogo
+    // for publicado em uma subpasta.
+    CAN_TYPES.forEach((type) => {
+      this.load.image(`can-${type.id}`, `assets/cans/${type.id}.png`);
+    });
+
+    // Jogador (touro) e bomba ainda usam placeholder gerado em runtime.
   }
 
   create(): void {
@@ -142,17 +153,14 @@ export class GameScene extends Phaser.Scene {
   // --- setup -----------------------------------------------------------------
 
   /**
-   * Gera as texturas provisorias em runtime. Para usar PNGs, basta carregar
-   * arquivos com as mesmas chaves no preload() e remover este metodo.
+   * Placeholders ainda sem arte definitiva. Ao receber os sprites do touro e
+   * da bomba, carregue-os no preload() com as chaves 'player', 'player-power'
+   * e 'bomb' e remova este metodo.
    */
   private createPlaceholderTextures(): void {
     this.makeRectTexture('player', PLAYER_WIDTH, PLAYER_HEIGHT, 0xf5f5f5);
     this.makeRectTexture('player-power', PLAYER_WIDTH, PLAYER_HEIGHT, 0x35d07f);
     this.makeCircleTexture('bomb', BOMB_RADIUS, 0x11151c);
-
-    CAN_TYPES.forEach((type) => {
-      this.makeRectTexture(`can-${type.id}`, CAN_WIDTH, CAN_HEIGHT, type.color);
-    });
   }
 
   private makeRectTexture(key: string, width: number, height: number, color: number): void {
@@ -240,6 +248,13 @@ export class GameScene extends Phaser.Scene {
 
     const can = this.cans.create(x, -CAN_HEIGHT, `can-${type.id}`) as Phaser.Physics.Arcade.Sprite;
     can.setData('type', type.id);
+
+    // Normaliza a altura mantendo a proporcao do PNG e ajusta o corpo fisico
+    // para acompanhar o tamanho exibido.
+    const scale = CAN_HEIGHT / can.height;
+    can.setScale(scale);
+    can.body?.setSize(can.width, can.height);
+
     can.setVelocityY(Phaser.Math.Between(CAN_MIN_FALL_SPEED, CAN_MAX_FALL_SPEED));
   }
 
