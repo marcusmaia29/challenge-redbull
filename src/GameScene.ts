@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 // Constantes de balanceamento. Ajuste estes valores para calibrar a partida.
 // ---------------------------------------------------------------------------
 
-const MATCH_DURATION_SECONDS = 60;
+const MATCH_DURATION_SECONDS = 40;
 
 const PLAYER_SPEED = 620;
 const PLAYER_BOTTOM_OFFSET = 90; // distancia do jogador ate a base da tela
@@ -14,7 +14,7 @@ const CAN_SPAWN_INTERVAL = 550; // ms entre latas
 const CAN_MIN_FALL_SPEED = 280;
 const CAN_MAX_FALL_SPEED = 430;
 
-const BOMB_SPAWN_INTERVAL = 2400; // ms entre bombas (bem menos frequentes)
+const BOMB_SPAWN_INTERVAL = 1400; // ms entre bombas (bem menos frequentes)
 const BOMB_MIN_FALL_SPEED = 320;
 const BOMB_MAX_FALL_SPEED = 470;
 const BOMB_PENALTY = 5;
