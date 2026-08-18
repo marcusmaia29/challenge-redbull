@@ -1209,42 +1209,42 @@ export class EndScene extends Phaser.Scene {
     );
   }
 
-  private showResult(): void {
-    if (this.isTransitioning) {
-      return;
-    }
+  // private showResult(): void {
+  //   if (this.isTransitioning) {
+  //     return;
+  //   }
 
-    this.isTransitioning = true;
+  //   this.isTransitioning = true;
 
-    this.resultView
-      .setVisible(true)
-      .setX(-220)
-      .setAlpha(0);
+  //   this.resultView
+  //     .setVisible(true)
+  //     .setX(-220)
+  //     .setAlpha(0);
 
-    this.playTransitionSweep('backward');
+  //   this.playTransitionSweep('backward');
 
-    this.tweens.add({
-      targets: this.rankingView,
-      x: this.scale.width * 0.72,
-      alpha: 0,
-      duration: 360,
-      ease: 'Cubic.In',
-    });
+  //   this.tweens.add({
+  //     targets: this.rankingView,
+  //     x: this.scale.width * 0.72,
+  //     alpha: 0,
+  //     duration: 360,
+  //     ease: 'Cubic.In',
+  //   });
 
-    this.tweens.add({
-      targets: this.resultView,
-      x: 0,
-      alpha: 1,
-      duration: 500,
-      delay: 100,
-      ease: 'Expo.Out',
+  //   this.tweens.add({
+  //     targets: this.resultView,
+  //     x: 0,
+  //     alpha: 1,
+  //     duration: 500,
+  //     delay: 100,
+  //     ease: 'Expo.Out',
 
-      onComplete: () => {
-        this.rankingView.setVisible(false);
-        this.isTransitioning = false;
-      },
-    });
-  }
+  //     onComplete: () => {
+  //       this.rankingView.setVisible(false);
+  //       this.isTransitioning = false;
+  //     },
+  //   });
+  // }
 
   private animateRankingRows(): void {
     this.rankingRows.forEach(
