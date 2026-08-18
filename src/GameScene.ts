@@ -28,10 +28,24 @@ const SPAWN_MARGIN = 60; // impede spawn colado nas bordas
 // Altura das latas em tela. A largura acompanha a proporcao de cada PNG.
 const CAN_HEIGHT = 120;
 
-// Tamanhos dos placeholders ainda sem arte definitiva (jogador e bomba).
-const PLAYER_WIDTH = 120;
-const PLAYER_HEIGHT = 90;
+// Placeholder ainda sem arte definitiva.
 const BOMB_RADIUS = 28;
+
+// --- Touro -----------------------------------------------------------------
+// Os 4 frames vivem em public/assets/player/bull_idle_<i>.png, recortados da
+// folha original (celula de 543x724). Todos compartilham a mesma linha de chao,
+// entao o "sobe e desce" acontece so na parte de cima do desenho.
+const BULL_FRAME_COUNT = 4;
+const BULL_SCALE = 0.4;
+const BULL_TILT_ANGLE = 5; // graus de inclinacao ao andar
+
+// Hitbox em pixels da TEXTURA (antes da escala). O desenho ocupa a faixa
+// x 35..532 / y 204..486 da celula; a caixa abaixo cobre o tronco e ignora
+// cauda, ponta dos chifres e cascos. Ajuste aqui se a coleta parecer injusta.
+const BULL_BODY_WIDTH = 360;
+const BULL_BODY_HEIGHT = 220;
+const BULL_BODY_OFFSET_X = 100;
+const BULL_BODY_OFFSET_Y = 240;
 
 /**
  * Sabores disponiveis. Cada `id` corresponde a public/assets/cans/<id>.png
@@ -59,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   private cans!: Phaser.Physics.Arcade.Group;
   private bombs!: Phaser.Physics.Arcade.Group;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private powerUpPulse?: Phaser.Tweens.Tween;
 
   private scoreText!: Phaser.GameObjects.Text;
   private timeText!: Phaser.GameObjects.Text;
@@ -85,7 +100,12 @@ export class GameScene extends Phaser.Scene {
       this.load.image(`can-${type.id}`, `assets/cans/${type.id}.png`);
     });
 
-    // Jogador (touro) e bomba ainda usam placeholder gerado em runtime.
+    // Frames do touro, um arquivo por quadro.
+    for (let i = 0; i < BULL_FRAME_COUNT; i++) {
+      this.load.image(`bull-idle-${i}`, `assets/player/bull_idle_${i}.png`);
+    }
+
+    // A bomba ainda usa placeholder gerado em runtime.
   }
 
   create(): void {
@@ -95,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     this.streak = 0;
     this.timeLeft = MATCH_DURATION_SECONDS;
     this.powerUpActive = false;
+    this.powerUpPulse = undefined;
     this.matchOver = false;
     this.cansByType = {};
     CAN_TYPES.forEach((type) => {
@@ -103,6 +124,7 @@ export class GameScene extends Phaser.Scene {
 
     this.createPlaceholderTextures();
     this.createBackground();
+    this.createPlayerAnimations();
     this.createPlayer();
     this.createHud();
 
@@ -156,28 +178,11 @@ export class GameScene extends Phaser.Scene {
   // --- setup -----------------------------------------------------------------
 
   /**
-   * Placeholders ainda sem arte definitiva. Ao receber os sprites do touro e
-   * da bomba, carregue-os no preload() com as chaves 'player', 'player-power'
-   * e 'bomb' e remova este metodo.
+   * Placeholder da bomba, ainda sem arte definitiva. Ao receber o sprite,
+   * carregue-o no preload() com a chave 'bomb' e remova este metodo.
    */
   private createPlaceholderTextures(): void {
-    this.makeRectTexture('player', PLAYER_WIDTH, PLAYER_HEIGHT, 0xf5f5f5);
-    this.makeRectTexture('player-power', PLAYER_WIDTH, PLAYER_HEIGHT, 0x35d07f);
     this.makeCircleTexture('bomb', BOMB_RADIUS, 0x11151c);
-  }
-
-  private makeRectTexture(key: string, width: number, height: number, color: number): void {
-    if (this.textures.exists(key)) {
-      return;
-    }
-
-    const graphics = this.add.graphics();
-    graphics.fillStyle(color, 1);
-    graphics.fillRect(0, 0, width, height);
-    graphics.lineStyle(4, 0xffffff, 0.85);
-    graphics.strokeRect(2, 2, width - 4, height - 4);
-    graphics.generateTexture(key, width, height);
-    graphics.destroy();
   }
 
   private makeCircleTexture(key: string, radius: number, color: number): void {
@@ -208,12 +213,40 @@ export class GameScene extends Phaser.Scene {
     background.setDepth(-10);
   }
 
+  /**
+   * Animacoes do jogador. As animacoes ficam no gerenciador global do Phaser,
+   * por isso o guarda contra recriacao a cada nova partida.
+   *
+   * Quando chegar a public/assets/player/bull_fly_<i>.png, carregue os frames
+   * no preload() e registre aqui uma segunda animacao 'bull-fly' no mesmo
+   * formato — depois basta troca-la em activatePowerUp/deactivatePowerUp.
+   */
+  private createPlayerAnimations(): void {
+    if (this.anims.exists('bull-idle')) {
+      return;
+    }
+
+    this.anims.create({
+      key: 'bull-idle',
+      frames: Array.from({ length: BULL_FRAME_COUNT }, (_, i) => ({ key: `bull-idle-${i}` })),
+      frameRate: 5,
+      repeat: -1,
+    });
+  }
+
   private createPlayer(): void {
     const { width, height } = this.scale;
 
-    this.player = this.physics.add.sprite(width / 2, height - PLAYER_BOTTOM_OFFSET, 'player');
+    this.player = this.physics.add.sprite(width / 2, height - PLAYER_BOTTOM_OFFSET, 'bull-idle-0');
+    this.player.setScale(BULL_SCALE);
     this.player.setCollideWorldBounds(true);
     this.player.setImmovable(true);
+
+    // Hitbox justa: so o tronco, sem cauda nem pontas.
+    this.player.body?.setSize(BULL_BODY_WIDTH, BULL_BODY_HEIGHT);
+    this.player.body?.setOffset(BULL_BODY_OFFSET_X, BULL_BODY_OFFSET_Y);
+
+    this.player.play('bull-idle');
   }
 
   private createHud(): void {
@@ -257,6 +290,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.player.setVelocityX(velocity);
+
+    // O desenho original olha para a direita: so espelhamos ao ir para a
+    // esquerda. A inclinacao minima da a sensacao de investida.
+    if (velocity < 0) {
+      this.player.setFlipX(true);
+      this.player.setAngle(-BULL_TILT_ANGLE);
+    } else if (velocity > 0) {
+      this.player.setFlipX(false);
+      this.player.setAngle(BULL_TILT_ANGLE);
+    } else {
+      this.player.setAngle(0);
+    }
   }
 
   private spawnCan(): void {
@@ -298,10 +343,14 @@ export class GameScene extends Phaser.Scene {
     const type = can.getData('type') as string;
     can.destroy();
 
+    const points = this.powerUpActive ? POWERUP_MULTIPLIER : 1;
+
     // O contador do sabor conta latas fisicas: sempre +1, independente do x2.
     this.cansByType[type] += 1;
-    this.score += this.powerUpActive ? POWERUP_MULTIPLIER : 1;
+    this.score += points;
     this.streak += 1;
+
+    this.showFloatingText(`+${points}`, '#ffd166');
 
     if (!this.powerUpActive && this.streak >= STREAK_FOR_POWERUP) {
       this.activatePowerUp();
@@ -319,24 +368,87 @@ export class GameScene extends Phaser.Scene {
 
     this.score = Math.max(0, this.score - BOMB_PENALTY);
     this.streak = 0;
-    this.cameras.main.flash(180, 255, 70, 70);
 
+    this.showBombFeedback();
     this.refreshHud();
+  }
+
+  /**
+   * Texto curto que sobe e some perto do touro. Usado no +1/+2 da coleta e na
+   * penalidade da bomba.
+   */
+  private showFloatingText(message: string, color: string): void {
+    const label = this.add
+      .text(this.player.x, this.player.y - 60, message, {
+        fontFamily: 'sans-serif',
+        fontSize: '30px',
+        color,
+        stroke: '#0a1730',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(5);
+
+    this.tweens.add({
+      targets: label,
+      y: label.y - 45,
+      alpha: 0,
+      duration: 600,
+      ease: 'Quad.easeOut',
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  /** Tranco curto na camera, texto da penalidade e piscada vermelha no touro. */
+  private showBombFeedback(): void {
+    this.cameras.main.shake(150, 0.006);
+    this.showFloatingText(`-${BOMB_PENALTY}`, '#ff6b6b');
+
+    // setTintFill (e nao setTint): o touro e vermelho puro e o tint comum,
+    // por ser multiplicativo, quase nao aparece nele.
+    this.player.setTintFill(0xffffff);
+    this.time.delayedCall(220, () => this.refreshPlayerTint());
+  }
+
+  /** Cor do touro conforme o estado atual: dourado no x2, natural fora dele. */
+  private refreshPlayerTint(): void {
+    if (this.powerUpActive) {
+      this.player.setTintFill(0xffc21e);
+    } else {
+      this.player.clearTint();
+    }
   }
 
   private activatePowerUp(): void {
     this.powerUpActive = true;
     this.streak = 0; // obriga a construir uma nova sequencia
-    this.player.setTexture('player-power');
     this.powerUpText.setVisible(true);
+    this.refreshPlayerTint();
+
+    // Pulsacao discreta enquanto o x2 durar. Quando existir 'bull-fly',
+    // troque a animacao aqui: this.player.play('bull-fly').
+    this.powerUpPulse = this.tweens.add({
+      targets: this.player,
+      scaleX: BULL_SCALE * 1.12,
+      scaleY: BULL_SCALE * 1.12,
+      duration: 320,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
     this.time.delayedCall(POWERUP_DURATION, this.deactivatePowerUp, undefined, this);
   }
 
   private deactivatePowerUp(): void {
     this.powerUpActive = false;
-    this.player.setTexture('player');
     this.powerUpText.setVisible(false);
+    this.refreshPlayerTint();
+
+    // Volta ao tamanho normal (e, futuramente, a animacao 'bull-idle').
+    this.powerUpPulse?.remove();
+    this.powerUpPulse = undefined;
+    this.player.setScale(BULL_SCALE);
   }
 
   private removeOffscreen(group: Phaser.Physics.Arcade.Group): void {
