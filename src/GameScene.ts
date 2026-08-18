@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 // Constantes de balanceamento. Ajuste estes valores para calibrar a partida.
 // ---------------------------------------------------------------------------
 
-const MATCH_DURATION_SECONDS = 60;
+const MATCH_DURATION_SECONDS = 5;
 
 const PLAYER_SPEED = 620;
 const PLAYER_BOTTOM_OFFSET = 90; // distancia do jogador ate a base da tela
