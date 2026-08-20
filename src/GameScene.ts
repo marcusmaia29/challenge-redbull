@@ -25,6 +25,11 @@ const POWERUP_MULTIPLIER = 2;
 
 const SPAWN_MARGIN = 60; // impede spawn colado nas bordas
 
+// Audio. Musica baixa o suficiente pra nao brigar com os efeitos.
+const MUSIC_VOLUME = 0.35;
+const SFX_CAN_VOLUME = 0.7;
+const SFX_BOMB_VOLUME = 0.8;
+
 // Altura das latas em tela. A largura acompanha a proporcao de cada PNG.
 const CAN_HEIGHT = 120;
 
@@ -87,6 +92,7 @@ export class GameScene extends Phaser.Scene {
   private bombs!: Phaser.Physics.Arcade.Group;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private flyTween?: Phaser.Tweens.Tween;
+  private bgMusic?: Phaser.Sound.BaseSound;
 
   // Toque lido da janela inteira, e nao so do canvas (ver setupPointerControl).
   private pointerDown = false;
@@ -114,6 +120,14 @@ export class GameScene extends Phaser.Scene {
     // for publicado em uma subpasta.
     this.load.image('cenario', 'assets/cenario_chalenge_redbull.png');
     this.load.image('bomb', 'assets/bomb.png');
+
+    // Som tocado no momento do "TE DA AAASAS!" (touro ganha asas).
+    this.load.audio('te-da-asas', 'assets/audio/te-da-asas.mp3');
+
+    // Trilha de fundo em loop e efeitos de coleta/bomba.
+    this.load.audio('bg-music', 'assets/audio/bg_music.mp3');
+    this.load.audio('sfx-can', 'assets/audio/can_pickup.mp3');
+    this.load.audio('sfx-bomb', 'assets/audio/bomb_hit.mp3');
 
     CAN_TYPES.forEach((type) => {
       this.load.image(`can-${type.id}`, `assets/cans/${type.id}.png`);
@@ -148,6 +162,12 @@ export class GameScene extends Phaser.Scene {
     this.createPlayerAnimations();
     this.createPlayer();
     this.createHud();
+
+    // O Phaser reaproveita a Scene entre partidas: paramos qualquer instancia
+    // anterior antes de subir uma nova, senao a trilha toca duplicada.
+    this.bgMusic?.stop();
+    this.bgMusic = this.sound.add('bg-music', { loop: true, volume: MUSIC_VOLUME });
+    this.bgMusic.play();
 
     this.cans = this.physics.add.group();
     this.bombs = this.physics.add.group();
@@ -400,6 +420,7 @@ export class GameScene extends Phaser.Scene {
 
     const type = can.getData('type') as string;
     can.destroy();
+    this.sound.play('sfx-can', { volume: SFX_CAN_VOLUME });
 
     const points = this.powerUpActive ? POWERUP_MULTIPLIER : 1;
 
@@ -423,6 +444,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     bomb.destroy();
+    this.sound.play('sfx-bomb', { volume: SFX_BOMB_VOLUME });
 
     this.score = Math.max(0, this.score - BOMB_PENALTY);
     this.streak = 0;
@@ -473,6 +495,7 @@ export class GameScene extends Phaser.Scene {
     this.streak = 0; // obriga a construir uma nova sequencia
     this.powerUpText.setVisible(true);
     this.showPowerUpBanner();
+    this.sound.play('te-da-asas');
 
     // Troca para o touro alado e sobe a hitbox junto com o tronco.
     this.player.play('bull-fly');
@@ -594,6 +617,7 @@ export class GameScene extends Phaser.Scene {
     this.matchOver = true;
     this.time.removeAllEvents(); // para spawns, relogio e timer do power-up
     this.physics.pause();
+    this.bgMusic?.stop();
 
     this.scene.start('EndScene', {
       score: this.score,
