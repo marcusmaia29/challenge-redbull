@@ -88,6 +88,11 @@ export class GameScene extends Phaser.Scene {
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private flyTween?: Phaser.Tweens.Tween;
 
+  // Toque lido da janela inteira, e nao so do canvas (ver setupPointerControl).
+  private pointerDown = false;
+  private pointerGameX = 0;
+  private pointerId = -1;
+
   private scoreText!: Phaser.GameObjects.Text;
   private timeText!: Phaser.GameObjects.Text;
   private streakText!: Phaser.GameObjects.Text;
@@ -131,6 +136,8 @@ export class GameScene extends Phaser.Scene {
     this.timeLeft = MATCH_DURATION_SECONDS;
     this.powerUpActive = false;
     this.flyTween = undefined;
+    this.pointerDown = false;
+    this.pointerId = -1;
     this.matchOver = false;
     this.cansByType = {};
     CAN_TYPES.forEach((type) => {
@@ -154,6 +161,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.cursors = this.input.keyboard?.createCursorKeys();
+    this.setupPointerControl();
 
     this.time.addEvent({
       delay: CAN_SPAWN_INTERVAL,
@@ -265,6 +273,58 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
   }
 
+  /**
+   * Controle por toque lido da JANELA inteira, e nao do canvas.
+   *
+   * Em telas que nao sao 4:3 sobram tarjas pretas ao lado do jogo. O ponteiro
+   * do Phaser marca `isDown` quando se toca ali, mas nao atualiza a coordenada
+   * (o toque nao esta sobre o canvas), entao o toque valia como se fosse na
+   * ultima posicao conhecida e o touro corria para o lado errado.
+   *
+   * Convertendo o clientX na hora, um toque na tarja resulta numa coordenada
+   * fora de 0..width — o que ainda da a direcao certa, esquerda ou direita.
+   */
+  private setupPointerControl(): void {
+    const canvas = this.game.canvas;
+
+    const paraCoordenadaDoJogo = (clientX: number): number => {
+      const rect = canvas.getBoundingClientRect();
+      return ((clientX - rect.left) / rect.width) * this.scale.width;
+    };
+
+    const aoPressionar = (event: PointerEvent): void => {
+      this.pointerId = event.pointerId;
+      this.pointerDown = true;
+      this.pointerGameX = paraCoordenadaDoJogo(event.clientX);
+    };
+
+    const aoMover = (event: PointerEvent): void => {
+      if (this.pointerDown && event.pointerId === this.pointerId) {
+        this.pointerGameX = paraCoordenadaDoJogo(event.clientX);
+      }
+    };
+
+    const aoSoltar = (event: PointerEvent): void => {
+      if (event.pointerId === this.pointerId) {
+        this.pointerDown = false;
+        this.pointerId = -1;
+      }
+    };
+
+    window.addEventListener('pointerdown', aoPressionar);
+    window.addEventListener('pointermove', aoMover);
+    window.addEventListener('pointerup', aoSoltar);
+    window.addEventListener('pointercancel', aoSoltar);
+
+    // A Scene e reaproveitada entre partidas: sem isso os listeners acumulariam.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('pointerdown', aoPressionar);
+      window.removeEventListener('pointermove', aoMover);
+      window.removeEventListener('pointerup', aoSoltar);
+      window.removeEventListener('pointercancel', aoSoltar);
+    });
+  }
+
   // --- loop da partida -------------------------------------------------------
 
   private updatePlayerMovement(): void {
@@ -274,14 +334,11 @@ export class GameScene extends Phaser.Scene {
       velocity = -PLAYER_SPEED;
     } else if (this.cursors?.right.isDown) {
       velocity = PLAYER_SPEED;
-    } else {
+    } else if (this.pointerDown) {
       // Toque/clique: anda na direcao do ponteiro enquanto estiver pressionado.
-      const pointer = this.input.activePointer;
-      if (pointer.isDown) {
-        const distance = pointer.worldX - this.player.x;
-        if (Math.abs(distance) > POINTER_DEAD_ZONE) {
-          velocity = distance < 0 ? -PLAYER_SPEED : PLAYER_SPEED;
-        }
+      const distance = this.pointerGameX - this.player.x;
+      if (Math.abs(distance) > POINTER_DEAD_ZONE) {
+        velocity = distance < 0 ? -PLAYER_SPEED : PLAYER_SPEED;
       }
     }
 
